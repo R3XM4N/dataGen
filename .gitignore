@@ -1,0 +1,4 @@
+#ide
+.vscode/
+#cmake
+build/
