@@ -14,109 +14,70 @@
 #include <vector>
 
 namespace RDataGen{
-    /**
-     * @brief Function that returns a vector of a selected size filled with numbers from array
-     * 
-     * @tparam T Datatype to be used for array and returned vector
-     * @param numers Takes a reference to an array with which numbers are to be used in the returned vector
-     * @param len Sets the ammount of members the returned std::vector should have
-     * 
-     * @return std::vector<T>
-     */
-    template<typename T, std::size_t N>
-    std::vector<T> RandomFillVector(std::array<T, N>& numbers,size_t len){
-        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-        std::mt19937 generator(seed);
-        std::uniform_int_distribution<int> randRange(0, N);
-    
-        std::vector<T> temp;
-        temp.reserve(len);
-        for (size_t i = 0; i < len; i++)
-        {
-            temp.push_back(numbers[randRange(generator)]);
-        }
-        temp.shrink_to_fit();
-        return temp;
-    }
     namespace detail{
-        /**
-         * @brief Assistant function for multithreaded version of RandomFillVector, it handles the multithreaded generation of the vector by 
-         * handling locking resources and assigning what chunks will certain threads generate not meant to be used by the user
-         * 
-         * @param numers Takes a reference to an array with which numbers are to be used in the returned vector
-         * @param len The length of the desired vector 
-         * @param dest Reference vector where the final data is going to be stored
-         * @param mutex Mutex reference needed so all the cores know if they can acces destination vector
-         */
         template<typename T, std::size_t N>
-        void FRTAssist(std::array<T, N>& numbers,size_t len, std::vector<T>& dest, std::mutex& mutex){
-            std::vector<T> temp = RandomFillVector(numbers,len);
+        T* RandomArraySpecific(std::array<T, N>& values, size_t length){
+            unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+            std::uniform_int_distribution<size_t> randRange(0, N - 1);
+            std::mt19937 generator(seed);
+            T* temp = new T[length];
+
+            for (size_t i = 0; i < length; i++)
+            {
+                temp[i] = values[randRange(generator)];
+            }
+            return temp;
+        }
+        template<typename T, std::size_t N>
+        void _RandomVectorSpecific(std::array<T, N>& values,size_t length, std::vector<T>& dest, std::mutex& mutex){
+            T* vals = RandomArraySpecific(values,length);
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                for (size_t i = 0; i < temp.size(); i++)
-                {
-                    dest.push_back(temp[i]);
-                }
+                dest.insert(dest.end(),vals,vals + length);
             }
+            delete[] vals;
         }
     }
     /**
-     * @brief Function that returns a vector of a selected size filled with numbers from array with the use of multithreading
+     * @brief Function that returns a vector of a selected size filled with specific values from the passed std::array with the optional use of multithreading
      * 
      * @tparam T Datatype to be used for array and returned vector
-     * @param numers Takes a reference to an array with which numbers are to be used in the returned vector
-     * @param len Sets the ammount of members the returned std::vector should have
-     * @param tCount Ammount of threads to run the function on
+     * @param values Takes a reference to an std::array with which values are to be used in the returned vector
+     * @param length Sets the ammount of members the returned std::vector should have
+     * @param threads Optional Ammount of threads to run the function on 
      * @return std::vector<T> 
      */
     template<typename T, std::size_t N>
-    std::vector<T> RandomFillVectorThreaded(std::array<T, N>& numbers,size_t len, int tCount){
-        if (tCount > len) tCount = len;
-        int clen = len/tCount;
-    
-        std::vector<T> temp;
-        temp.reserve(len);
-        
-        std::vector<std::thread> threads;
-        std::mutex mutex;
-        if (tCount > 0)
+    std::vector<T> RandomVectorSpecific(std::array<T, N>& values,size_t length, int threads = -1){
+        std::vector<T> finalVector;
+        finalVector.reserve(length);
+        if (threads < 2)
         {
-            for (size_t i = 0; i < tCount - 1; i++)
+            T* vals = detail::RandomArraySpecific(values,length);
+            finalVector.insert(finalVector.end(),vals,vals + length);
+            delete[] vals;
+        }
+        else{
+            std::vector<std::thread> _threads;
+            _threads.reserve(threads);
+            std::mutex mutex;
+            int chunk_size = length/threads;
+
+            for (size_t i = 0; i < threads - 1; i++)
             {
-                threads.emplace_back(std::thread(detail::FRTAssist<T, N>, std::ref(numbers), clen, std::ref(temp), std::ref(mutex)));
-                len = len - clen;
+                _threads.emplace_back(std::thread(detail::_RandomVectorSpecific<T, N>, std::ref(values), chunk_size, std::ref(finalVector), std::ref(mutex)));
+                length -= chunk_size;
             }
-            threads.emplace_back(std::thread(detail::FRTAssist<T, N>, std::ref(numbers), len, std::ref(temp), std::ref(mutex)));
-        }
-        for (size_t i = 0; i < tCount; i++)
-        {
-            threads[i].join();
-        }
-        temp.shrink_to_fit();
-        return temp;
-    }
-    /**
-     * @brief Prints the vector to cout styled as "{n,n,n}" where n are numbers
-     * 
-     * @param targetVector What is supposed to be printed
-     */
-    template<typename T>
-    void CoutVectorSet(std::vector<T>& targetVector){
-        for (size_t i = 0; i < targetVector.size(); i++)
-        {
-            if (i == 1)
+            _threads.emplace_back(std::thread(detail::_RandomVectorSpecific<T, N>, std::ref(values), length, std::ref(finalVector), std::ref(mutex)));
+            
+            for (size_t i = 0; i < threads; i++)
             {
-                std::cout << "{" << targetVector[i] << ",";
-            }
-            else if(i == targetVector.size() - 1){
-                std::cout << targetVector[i] << "}";
-            }
-            else{
-                std::cout << targetVector[i] << ",";
+                _threads[i].join();
             }
         }
-        printf("\n");
+        return finalVector;
     }
+
 }
 
 #endif //RDATAGEN_VGEN_HPP
