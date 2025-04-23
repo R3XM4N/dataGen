@@ -18,7 +18,7 @@ namespace RDataGen{
         template<typename T, std::size_t N>
         T* RandomArraySpecific(std::array<T, N>& values, size_t length){
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-            std::uniform_int_distribution<size_t> randRange(0, N - 1);
+            std::uniform_int_distribution<T> randRange(0, N - 1);
             std::mt19937 generator(seed);
             T* temp = new T[length];
 
@@ -61,7 +61,7 @@ namespace RDataGen{
             std::vector<std::thread> _threads;
             _threads.reserve(threads);
             std::mutex mutex;
-            int chunk_size = length/threads;
+            size_t chunk_size = length/threads;
 
             for (size_t i = 0; i < threads - 1; i++)
             {

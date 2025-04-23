@@ -20,7 +20,7 @@ namespace RDataGen{
     void CoutVectorSet(std::vector<T>& targetVector){
         for (size_t i = 0; i < targetVector.size(); i++)
         {
-            if (i == 1)
+            if (i == 0)
             {
                 std::cout << "{" << targetVector[i] << ",";
             }
